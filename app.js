@@ -81,21 +81,3 @@ server.on('error', (error) => {
 });
 
 console.log('--- [Zeabur Log] app.js execution finished setting up listen ---');
-
-const cors = require('cors');
-const divinationRoutes = require('./divinationController.js');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(cors());
-app.use(express.json());
-app.use('/api/divination', divinationRoutes);
-
-app.get('/', (req, res) => {
-  res.send('API 啟動成功');
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
