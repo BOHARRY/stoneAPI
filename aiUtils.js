@@ -65,8 +65,8 @@ async function callOpenAI(prompt, purpose = "general") {
     let parsed;
     try {
       // 嘗試移除可能的 markdown JSON 標記
-      const cleaned = content.replace(/^```json\s*|```$/gi, '').trim();
-      parsed = JSON.parse(cleaned);
+      cleaned = cleaned.replace(/\\(?=\r?\n)/g, '\\n');
+      parsed = JSON.parse(cleaned); // <-- 用清理後的字串進行解析
       console.log(`--- [AI LOG/OpenAI JSON Parsed: ${purpose}] ---`);
       // console.log(parsed); // 打印解析後的物件
 
