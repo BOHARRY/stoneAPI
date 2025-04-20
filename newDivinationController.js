@@ -78,11 +78,11 @@ router.post('/continue', async (req, res) => {
     userResponse,
     previousStorySegment,
     previousGuidingQuestion,
-    drawnCard
+    //drawnCard
   } = req.body;
 
   // 基本驗證
-  if (!interactionId || round === undefined || !userResponse || !previousStorySegment || !previousGuidingQuestion || !drawnCard) {
+  if (!interactionId || round === undefined || !userResponse || !previousStorySegment || !previousGuidingQuestion) {
     return res.status(400).json({ success: false, error: '缺少必要的請求參數' });
   }
   if (typeof round !== 'number' || round < 1 || round > 2) { // 只應處理 round 1 和 2 的回應
@@ -91,7 +91,7 @@ router.post('/continue', async (req, res) => {
 
   try {
     // 1. 建構主要內容 Prompt (包含上下文、回應、卡牌提示)
-    const cardHint = drawnCard.name ? `抽到的卦象【${drawnCard.name}】暗示著某種趨勢或能量，請在續寫故事或提問時隱晦地融入其意涵，但不要直接提及卦象名稱。` : "";
+    //const cardHint = drawnCard.name ? `抽到的卦象【${drawnCard.name}】暗示著某種趨勢或能量，請在續寫故事或提問時隱晦地融入其意涵，但不要直接提及卦象名稱。` : "";
 
     const mainContentPrompt = `你是一位充滿智慧與慈悲的東方靈性導師，擅長編織**連續性**的心靈寓言。
 **這是正在進行的寓言的上一段落**：「${previousStorySegment}」
