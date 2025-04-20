@@ -1,5 +1,8 @@
 // *** 加在檔案最上方 ***
 console.log('--- [API LOG] app.js execution started ---');
+require('dotenv').config(); // ✅ 加載 .env 文件
+console.log('--- [API LOG] dotenv configured ---');
+console.log('--- [API LOG] app.js execution started ---');
 
 // 捕捉未處理的 Promise 拒絕
 process.on('unhandledRejection', (reason, promise) => {
@@ -21,6 +24,8 @@ const express = require('express');
 console.log('--- [API LOG] Express required ---');
 const cors = require('cors');
 console.log('--- [API LOG] CORS required ---');
+const newDivinationRoutes = require('./newDivinationController'); // ✅ 新的路由
+const imageRoutes = require('./imageController'); // ✅ 圖像生成路由
 const divinationRoutes = require('./divinationController');
 console.log('--- [API LOG] Routes required ---');
 
@@ -37,7 +42,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 console.log('--- [API LOG] CORS middleware enabled ---');
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // ✅ 增加 JSON body 大小限制 (以防 base64 圖片)
 console.log('--- [API LOG] JSON middleware enabled ---');
 
 
@@ -47,13 +52,15 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/api/divination', divinationRoutes);
-console.log('--- [API LOG] Divination routes mounted ---');
+// 掛載新的路由
+app.use('/api/divination', newDivinationRoutes); // ✅ 使用新的占卜路由
+app.use('/api/image', imageRoutes); // ✅ 掛載圖像生成路由
+console.log('--- [API LOG] New divination and image routes mounted ---');
 
 
 app.get('/', (req, res) => {
   console.log('--- [API LOG] Root path / requested ---');
-  res.send('API 啟動成功 - v2'); // 加個版本號，確認是新代碼
+  res.send('API 啟動成功 - v3'); // 加個版本號，確認是新代碼
 });
 
 // *** 修改 app.listen 部分，增加錯誤處理 ***
