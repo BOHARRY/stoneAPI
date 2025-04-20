@@ -30,7 +30,12 @@ const PORT = process.env.PORT || 3000;
 console.log(`--- [API LOG] Attempting to run on PORT: ${PORT} ---`);
 
 
-app.use(cors());
+const corsOptions = {
+  origin: true, // ✅ 會自動設定為 request 的 origin
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 console.log('--- [API LOG] CORS middleware enabled ---');
 app.use(express.json());
 console.log('--- [API LOG] JSON middleware enabled ---');
