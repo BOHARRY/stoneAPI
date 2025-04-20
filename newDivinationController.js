@@ -97,7 +97,6 @@ router.post('/continue', async (req, res) => {
 **這是正在進行的寓言的上一段落**：「${previousStorySegment}」
 **上一個引導問題是**：「${previousGuidingQuestion}」
 使用者對此的回應是：「${userResponse}」
-${cardHint}
 
 請根據使用者的回應，**巧妙地延續**這個寓言故事，並完成以下任務，嚴格以 JSON 格式回應：
 
