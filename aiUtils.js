@@ -110,11 +110,12 @@ async function callStabilityAI(prompt, style_preset = "fantasy-art") {
   // formData.append("aspect_ratio", "1:1");
 
   try {
-    const response = await fetch(`https://api.stability.ai/v2beta/stable-image/generate/${STABILITY_MODEL}`, {
+    const response = await fetch(`https://api.stability.ai/v2beta/stable-image/generate/core`, {
+    // --- 修改結束 ---
       method: "POST",
       headers: {
         Authorization: `Bearer ${STABILITY_API_KEY}`,
-        Accept: "image/*" // 接受任何圖片格式
+        Accept: "image/*"
       },
       body: formData
     });
