@@ -77,7 +77,7 @@ router.post('/continue', async (req, res) => {
     round, // 目前是第幾輪的回應 (e.g., 1 代表回應第一輪, 要生成第二輪)
     userResponse,
     previousStorySegment,
-    previousGuidingQuestion,
+    previousGuidingQuestion
     //drawnCard
   } = req.body;
 
