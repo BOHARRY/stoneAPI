@@ -82,7 +82,6 @@ server.on('error', (error) => {
 
 console.log('--- [Zeabur Log] app.js execution finished setting up listen ---');
 
-const express = require('express');
 const cors = require('cors');
 const divinationRoutes = require('./divinationController.js');
 
