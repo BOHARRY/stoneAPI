@@ -19,8 +19,8 @@ router.post('/start', async (req, res) => {
     const initialContentPrompt = `你是一位充滿智慧與慈悲的東方靈性導師，如同媽祖般溫柔。使用者此刻的心聲是：「${userInput}」
 
 請為此心聲完成以下任務，並嚴格以 JSON 格式回應，不包含任何額外文字：
-1.  **storySegment**: 寫一段全新的「寓言故事開頭」，約 50-70 字，正體中文，風格需帶有東方哲思、寧靜且富含象徵意涵。
-2.  **guidingQuestion**: 根據這段故事開頭的意境，設計一個引導性的、簡單具體的問題（正體中文，約 5-20 字）。
+1.  **storySegment**: 寫一段全新的「寓言故事開頭」，約 20-40 字，正體中文，風格需帶有東方哲思、寧靜且富含象徵意涵。
+2.  **guidingQuestion**: 根據這段故事開頭的意境，設計一個引導性的、簡單具體的問題（正體中文，約 5-15 字）。
 3.  **imagePrompt**: 根據故事開頭的意境，創造一段精確的英文 Image Prompt，描述畫面主體、氛圍、光線、色彩，並融入以下風格："Inspired by Alphonse Mucha and traditional East Asian ink wash painting (sumi-e), fantasy realism style. Focused composition, symbolic subject, tranquil setting (misty mountains, serene garden, moonlit water), ethereal soft lighting, drifting mist, flowing lines, delicate textures. Mood: Sacred stillness, poetic melancholy, quiet transcendence, spiritual reflection, timeless beauty. Gentle harmonious color palette, touches of gold/luminescence. Strictly no text."
 
 JSON 結構如下：
@@ -101,8 +101,8 @@ router.post('/continue', async (req, res) => {
 請根據使用者的回應，**巧妙地延續**這個寓言故事，並完成以下任務，嚴格以 JSON 格式回應：
 
 1.  **aiReply**: (可選) 針對使用者的回應，寫一句不超過 30 字、充滿哲思與慈悲的回應短語（正體中文）。如果沒有特別合適的可以省略此欄位。
-2.  **storySegment**: **承接**上一段落的情境與意象，並將使用者回應中流露的情感或思考融入其中，編寫故事的**下一個段落** (約 50-70 字，正體中文)。風格需保持東方哲思、寧靜、象徵性，並確保與前文有**明顯的連貫性**。
-3.  **guidingQuestion**: 根據這個**故事續篇**的意境，設計一個**新的**引導性的、簡單具體的問題（正體中文，約 5-20 字），問題需與前一個不同。
+2.  **storySegment**: **承接**上一段落的情境與意象，並將使用者回應中流露的情感或思考融入其中，編寫故事的**下一個段落** (約 20-40 字，正體中文)。風格需保持東方哲思、寧靜、象徵性，並確保與前文有**明顯的連貫性**。
+3.  **guidingQuestion**: 根據這個**故事續篇**的意境，設計一個**新的**引導性的、簡單具體的問題（正體中文，約 5-15 字），問題需與前一個不同。
 4.  **imagePrompt**: 根據這個**故事續篇**的意境與畫面，創造一段精確的英文 Image Prompt。需清晰描述**續篇中**的畫面主體、氛圍、光線、色彩（考慮與前一畫面的關聯性），融合續篇的象徵意義。風格同前："Inspired by Alphonse Mucha and traditional East Asian ink wash painting (sumi-e), fantasy realism style... Strictly no text."
 
 JSON 結構如下：
