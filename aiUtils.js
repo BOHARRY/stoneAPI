@@ -3,7 +3,7 @@ require('dotenv').config(); // Load environment variables
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'; // Default to gpt-4o
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // Default to gpt-4o
 const STABILITY_MODEL = process.env.STABILITY_MODEL || 'stable-image-core'; // Default model
 
 if (!OPENAI_API_KEY || !STABILITY_API_KEY) {
