@@ -188,19 +188,19 @@ router.post('/analyze', async (req, res) => {
 - 請回覆JSON結構
 **JSON結構範例**：
 {
-  "analysis_html": "玄機解析..."
+  "analysis_word": "玄機解析..."
 }`;
 
     // 2. 呼叫 OpenAI 獲取分析結果 (注意：分析可能需要更長的 token 或時間)
     //    可能需要考慮使用 max_tokens 參數，並處理可能的超時或內容截斷
     const analysisResult = await callOpenAI(analysisPrompt, 'analyze'); // 注意: OpenAI 直接回傳 JSON，內容在某個 key 下
 
-    // 假設 AI 回應的 JSON 結構是 { "analysis_html": "..." }
+    // 假設 AI 回應的 JSON 結構是 { "analysis_word": "..." }
     // 如果 AI 直接回傳 HTML 字串，需要調整 callOpenAI 或這裡的處理
     let analysisHtml = '';
     if(typeof analysisResult === 'object' && analysisResult !== null) {
         // 嘗試尋找包含 HTML 的鍵，這裡假設幾個可能的鍵名
-        const possibleKeys = ['analysis', 'analysis_html', 'html_report', 'interpretation'];
+        const possibleKeys = ['analysis', 'analysis_word', 'html_report', 'interpretation'];
         for (const key of possibleKeys) {
             if (typeof analysisResult[key] === 'string') {
                 analysisHtml = analysisResult[key];
