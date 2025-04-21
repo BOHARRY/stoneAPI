@@ -1,15 +1,72 @@
 // aiUtils.js
-require('dotenv').config(); // Load environment variables
+require('dotenv').config(); // 載入環境變數
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // Default to gpt-4o
-const STABILITY_MODEL = process.env.STABILITY_MODEL || 'stable-image-core'; // Default model
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // 預設為 gpt-4o-mini
+const STABILITY_MODEL = process.env.STABILITY_MODEL || 'stable-image-core'; // 預設模型
 
 if (!OPENAI_API_KEY || !STABILITY_API_KEY) {
   console.error("錯誤：缺少 OpenAI 或 Stability AI 的 API 金鑰。請檢查 .env 檔案。");
   // 在實際應用中，你可能想更優雅地處理這個問題，而不是僅僅打印錯誤
   // process.exit(1); // 或者在開發模式下允許繼續但功能受限
+}
+
+/**
+ * 修復並解析可能包含問題的 JSON 字串
+ * @param {string} jsonString - 可能有問題的 JSON 字串
+ * @param {string} purpose - 解析的目的 (用於日誌)
+ * @returns {object} - 解析後的 JSON 物件
+ * @throws {Error} 如果無法修復和解析
+ */
+function sanitizeAndParseJSON(jsonString, purpose) {
+  console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 開始清理和解析 JSON ---`);
+  
+  // 移除可能的 markdown JSON 標記
+  let cleaned = jsonString.replace(/^```json\s*|```$/gi, '').trim();
+  
+  // 步驟 1: 處理控制字元
+  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
+    // 將它們轉換為適當的轉義序列
+    if (match === '\n') return '\\n';
+    if (match === '\r') return '\\r';
+    if (match === '\t') return '\\t';
+    if (match === '\b') return '\\b';
+    if (match === '\f') return '\\f';
+    // 其他控制字元直接移除
+    return '';
+  });
+  
+  try {
+    // 步驟 2: 嘗試解析清理後的 JSON
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.warn(`--- [AI LOG/JSON Warning: ${purpose}] 初步清理後仍無法解析 JSON，嘗試進階修復 ---`);
+    
+    try {
+      // 步驟 3: 嘗試修復引號問題 (單引號轉雙引號)
+      const fixedQuotes = cleaned.replace(/(?<!\\)'/g, '"');
+      return JSON.parse(fixedQuotes);
+    } catch (e2) {
+      console.error(`--- [AI LOG/JSON Error: ${purpose}] 所有修復嘗試均失敗 ---`);
+      
+      // 嘗試找出問題位置的字元
+      try {
+        const errorMatch = e.message.match(/position (\d+)/);
+        if (errorMatch && errorMatch[1]) {
+          const position = parseInt(errorMatch[1]);
+          const problemChar = cleaned.charAt(position);
+          const context = cleaned.substring(Math.max(0, position - 20), Math.min(cleaned.length, position + 20));
+          console.error(`問題位置 ${position} 的字元: '${problemChar}' (ASCII: ${problemChar.charCodeAt(0)}), 上下文: "${context}"`);
+        }
+      } catch (e3) {
+        // 忽略診斷錯誤
+      }
+      
+      // 如果仍然失敗，拋出更詳細的錯誤
+      throw new Error(`無法解析 JSON: ${e.message}\n原始內容片段: ${jsonString.substring(0, 150)}...`);
+    }
+  }
 }
 
 /**
@@ -34,7 +91,7 @@ async function callOpenAI(prompt, purpose = "general") {
         model: OPENAI_MODEL,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8, // 保持一定的創意性
-        // response_format: { type: "json_object" }, // 強制 JSON 輸出模式
+        response_format: { type: "json_object" }, // 強制 JSON 輸出模式
       })
     });
 
@@ -61,12 +118,10 @@ async function callOpenAI(prompt, purpose = "general") {
     console.log(`--- [AI LOG/OpenAI Raw Response: ${purpose}] ---`); // 不打印完整內容
     // console.log(content.substring(0, 200) + '...'); // 僅打印部分內容預覽
 
-    // --- JSON 解析邏輯 ---
+    // --- 使用加強版 JSON 解析邏輯 ---
     let parsed;
     try {
-      // 嘗試移除可能的 markdown JSON 標記
-      const cleaned = content.replace(/^```json\s*|```$/gi, '').trim();
-      parsed = JSON.parse(cleaned);
+      parsed = sanitizeAndParseJSON(content, purpose);
       console.log(`--- [AI LOG/OpenAI JSON Parsed: ${purpose}] ---`);
       // console.log(parsed); // 打印解析後的物件
 
@@ -77,7 +132,7 @@ async function callOpenAI(prompt, purpose = "general") {
       return parsed;
 
     } catch (e) {
-        console.error(`--- [AI LOG/OpenAI Error: ${purpose}] JSON 解析失敗:`, e.message, "原始內容片段:", content.substring(0, 100));
+        console.error(`--- [AI LOG/OpenAI Error: ${purpose}] JSON 解析失敗:`, e.message, "原始內容片段:", content.substring(0, 150));
         // 如果強制 JSON 模式失敗，這表示模型沒有遵循指示
         throw new Error(`GPT 回傳 (${purpose}) 內容無法解析為 JSON: ${e.message}`);
     }
@@ -111,7 +166,6 @@ async function callStabilityAI(prompt, style_preset = "fantasy-art") {
 
   try {
     const response = await fetch(`https://api.stability.ai/v2beta/stable-image/generate/core`, {
-    // --- 修改結束 ---
       method: "POST",
       headers: {
         Authorization: `Bearer ${STABILITY_API_KEY}`,
