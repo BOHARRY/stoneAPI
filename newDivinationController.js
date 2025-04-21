@@ -16,10 +16,9 @@ router.post('/start', async (req, res) => {
 
   try {
     // 1. 生成第一幕內容的 Prompt
-    const initialContentPrompt = `你是一位充滿智慧與慈悲的東方靈性導師，如同媽祖般溫柔。使用者此刻的心聲是：「${userInput}」
-
-請為此心聲完成以下任務，並嚴格以 JSON 格式回應，不包含任何額外文字：
-1.  **storySegment**: 寫一段全新的「寓言故事開頭」，約 20-40 字，正體中文，風格需帶有東方哲思、寧靜且富含象徵意涵。
+    const initialContentPrompt = `你是一位充滿智慧與慈悲的兒童心理導師，如同媽祖般溫柔親切。你了解人們在生活中的煩惱與渴望，總能用簡單的故事與柔和的語氣，安撫人心。詢問者此刻的心聲是：「${userInput}」
+請根據這個心聲，回應一段**貼近日常、帶有東方象徵意涵**的寓言故事開頭，並嚴格以 JSON 格式回應，不包含任何額外文字：
+1.  **storySegment**: 寫一段全新的「寓言故事開頭」，約 20-40 字，正體中文，生動、有想像力且富含象徵意涵。
 2.  **guidingQuestion**: 根據這段故事開頭的意境，設計一個引導性的、簡單具體的問題（正體中文，約 5-15 字）。
 3.  **imagePrompt**: 根據故事開頭的意境，創造一段精確的英文 Image Prompt，描述畫面主體、氛圍、光線、色彩，並融入以下風格："Inspired by Alphonse Mucha and traditional East Asian ink wash painting (sumi-e), fantasy realism style. Focused composition, symbolic subject, tranquil setting (misty mountains, serene garden, moonlit water), ethereal soft lighting, drifting mist, flowing lines, delicate textures. Mood: Sacred stillness, poetic melancholy, quiet transcendence, spiritual reflection, timeless beauty. Gentle harmonious color palette, touches of gold/luminescence. Strictly no text."
 
@@ -93,7 +92,7 @@ router.post('/continue', async (req, res) => {
     // 1. 建構主要內容 Prompt (包含上下文、回應、卡牌提示)
     //const cardHint = drawnCard.name ? `抽到的卦象【${drawnCard.name}】暗示著某種趨勢或能量，請在續寫故事或提問時隱晦地融入其意涵，但不要直接提及卦象名稱。` : "";
 
-    const mainContentPrompt = `你是一位充滿智慧與慈悲的東方靈性導師，擅長編織**連續性**的心靈寓言。
+    const mainContentPrompt = `你是一位充滿智慧與慈悲的兒童心理導師，擅長編織**連續性**的心靈寓言。
 **這是正在進行的寓言的上一段落**：「${previousStorySegment}」
 **上一個引導問題是**：「${previousGuidingQuestion}」
 使用者對此的回應是：「${userResponse}」
@@ -171,7 +170,7 @@ router.post('/analyze', async (req, res) => {
       // history += `(圖像意境提示: ${interaction.imagePrompt})\n`; // 可以選擇是否包含圖像提示
     });
 
-     const analysisPrompt = `你是一位資深的解卦師與心靈導師，請整合以下完整的互動歷程，為使用者提供一份深刻且個人化的分析報告。
+     const analysisPrompt = `你是一位資深的解卦師與心靈導師，請整合以下完整的互動歷程，為用戶提供一份深刻且個人化的分析報告。
 
 **初始心聲**：「${initialUserInput}」
 **互動歷程與卦象**：${history}
