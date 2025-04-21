@@ -25,47 +25,118 @@ function sanitizeAndParseJSON(jsonString, purpose) {
   // 移除可能的 markdown JSON 標記
   let cleaned = jsonString.replace(/^```json\s*|```$/gi, '').trim();
   
-  // 步驟 1: 處理控制字元
-  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
-    // 將它們轉換為適當的轉義序列
-    if (match === '\n') return '\\n';
-    if (match === '\r') return '\\r';
-    if (match === '\t') return '\\t';
-    if (match === '\b') return '\\b';
-    if (match === '\f') return '\\f';
-    // 其他控制字元直接移除
-    return '';
-  });
-  
+  // 步驟 1: 先嘗試直接解析（可能本來就是有效的JSON）
   try {
-    // 步驟 2: 嘗試解析清理後的 JSON
     return JSON.parse(cleaned);
-  } catch (e) {
-    console.warn(`--- [AI LOG/JSON Warning: ${purpose}] 初步清理後仍無法解析 JSON，嘗試進階修復 ---`);
+  } catch (initialError) {
+    // 繼續處理需要清理的情況
+    console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 初始解析失敗，進行深度清理 ---`);
+  }
+
+  // 步驟 2: 處理實際的換行和空白符號
+  // 先使用JSON.stringify格式化，這會正確處理換行符
+  try {
+    // 2.1 嘗試修復最常見的格式問題：不正確的換行
+    let preProcessed = cleaned;
     
-    try {
-      // 步驟 3: 嘗試修復引號問題 (單引號轉雙引號)
-      const fixedQuotes = cleaned.replace(/(?<!\\)'/g, '"');
-      return JSON.parse(fixedQuotes);
-    } catch (e2) {
-      console.error(`--- [AI LOG/JSON Error: ${purpose}] 所有修復嘗試均失敗 ---`);
-      
-      // 嘗試找出問題位置的字元
+    // 如果是開頭的換行問題（根據錯誤日誌）
+    if (cleaned.startsWith('{\n')) {
+      // 嘗試將所有實際換行符轉換為空格
+      preProcessed = cleaned.replace(/\n\s*/g, ' ');
       try {
-        const errorMatch = e.message.match(/position (\d+)/);
-        if (errorMatch && errorMatch[1]) {
-          const position = parseInt(errorMatch[1]);
-          const problemChar = cleaned.charAt(position);
-          const context = cleaned.substring(Math.max(0, position - 20), Math.min(cleaned.length, position + 20));
-          console.error(`問題位置 ${position} 的字元: '${problemChar}' (ASCII: ${problemChar.charCodeAt(0)}), 上下文: "${context}"`);
-        }
-      } catch (e3) {
-        // 忽略診斷錯誤
+        return JSON.parse(preProcessed);
+      } catch (e) {
+        // 繼續嘗試其他修復方法
       }
-      
-      // 如果仍然失敗，拋出更詳細的錯誤
-      throw new Error(`無法解析 JSON: ${e.message}\n原始內容片段: ${jsonString.substring(0, 150)}...`);
     }
+    
+    // 2.2 嘗試從JSON文本中提取有效的JSON部分
+    const jsonMatch = cleaned.match(/(\{[\s\S]*\})/);
+    if (jsonMatch && jsonMatch[1]) {
+      try {
+        return JSON.parse(jsonMatch[1]);
+      } catch (e) {
+        // 繼續嘗試其他修復方法
+      }
+    }
+    
+    // 步驟 3: 處理控制字元
+    cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
+      // 對於字串內的換行和特殊字元，將它們轉換為適當的轉義序列
+      if (match === '\n') return ' '; // 換行改為空格，更安全
+      if (match === '\r') return ' ';
+      if (match === '\t') return ' ';
+      if (match === '\b') return '';
+      if (match === '\f') return '';
+      // 其他控制字元直接移除
+      return '';
+    });
+    
+    // 步驟 4: 嘗試使用JSON5解析（更寬鬆的JSON解析）
+    try {
+      // 如果專案中有JSON5，可以使用它進行更寬鬆的解析
+      // 目前使用標準JSON.parse
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.warn(`--- [AI LOG/JSON Warning: ${purpose}] 清理後仍無法解析 JSON，嘗試進階修復 ---`);
+      
+      // 步驟 5: 最後的嘗試 - 重建JSON物件
+      try {
+        // 5.1 嘗試修復引號問題
+        let fixedJson = cleaned.replace(/(?<!\\)'/g, '"'); // 單引號轉雙引號
+        
+        // 5.2 嘗試修復未閉合的引號和括號
+        const openBraces = (fixedJson.match(/\{/g) || []).length;
+        const closeBraces = (fixedJson.match(/\}/g) || []).length;
+        if (openBraces > closeBraces) {
+          fixedJson += '}'.repeat(openBraces - closeBraces);
+        }
+        
+        // 5.3 去除潛在的尾隨逗號
+        fixedJson = fixedJson.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
+        
+        return JSON.parse(fixedJson);
+      } catch (e2) {
+        // 5.4 最後的絕招：手動建立物件
+        try {
+          console.error(`--- [AI LOG/JSON Error: ${purpose}] 標準修復嘗試均失敗，進行深度修復 ---`);
+          
+          // 搜尋 key-value 對
+          const keyValueRegex = /"([^"]+)"\s*:\s*"([^"]*)"/g;
+          const reconstructed = {};
+          let match;
+          
+          while ((match = keyValueRegex.exec(cleaned)) !== null) {
+            reconstructed[match[1]] = match[2];
+          }
+          
+          // 如果找到至少一個key-value對，返回重建的物件
+          if (Object.keys(reconstructed).length > 0) {
+            console.log(`--- [AI LOG/JSON Success: ${purpose}] 成功通過深度修復重建JSON物件 ---`);
+            return reconstructed;
+          }
+          
+          // 如果都失敗了，記錄詳細錯誤信息
+          console.error(`--- [AI LOG/JSON Error: ${purpose}] 所有修復嘗試均失敗 ---`);
+          
+          // 嘗試找出問題位置的字元
+          const errorMatch = e.message.match(/position (\d+)/);
+          if (errorMatch && errorMatch[1]) {
+            const position = parseInt(errorMatch[1]);
+            const problemChar = cleaned.charAt(position);
+            const context = cleaned.substring(Math.max(0, position - 20), Math.min(cleaned.length, position + 20));
+            console.error(`問題位置 ${position} 的字元: '${problemChar}' (ASCII: ${problemChar.charCodeAt(0)}), 上下文: "${context}"`);
+          }
+          
+          // 拋出詳細的錯誤
+          throw new Error(`無法解析 JSON: ${e.message}\n原始內容片段: ${jsonString.substring(0, 150)}...`);
+        } catch (finalError) {
+          throw finalError;
+        }
+      }
+    }
+  } catch (e) {
+    throw new Error(`JSON處理過程中發生未預期錯誤: ${e.message}`);
   }
 }
 
@@ -81,6 +152,11 @@ async function callOpenAI(prompt, purpose = "general") {
   if (!OPENAI_API_KEY) throw new Error("OpenAI API 金鑰未設定");
 
   try {
+    // 在提示詞中明確請求返回標準JSON格式
+    const enhancedPrompt = typeof prompt === 'string' 
+      ? `${prompt}\n\n請以有效的JSON格式回覆，不要使用Markdown。確保JSON可以直接被JSON.parse()解析，沒有額外的格式或標記。`
+      : prompt;
+      
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -89,8 +165,8 @@ async function callOpenAI(prompt, purpose = "general") {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.8, // 保持一定的創意性
+        messages: [{ role: "user", content: enhancedPrompt }],
+        temperature: 0.7, // 稍微降低以提高一致性
         response_format: { type: "json_object" }, // 強制 JSON 輸出模式
       })
     });
@@ -151,18 +227,39 @@ async function callOpenAI(prompt, purpose = "general") {
  * @returns {Promise<string>} - Base64 編碼的圖像數據 (包含 MIME type)
  * @throws {Error} 如果 API 請求失敗
  */
-async function callStabilityAI(prompt, style_preset = "fantasy-art") {
+/**
+ * 呼叫 Stability AI 生成圖片
+ * @param {string} prompt - 圖像提示詞 (英文)
+ * @param {string} style_preset - 風格預設 (e.g., "fantasy-art")
+ * @param {object} options - 其他可選參數的物件
+ * @returns {Promise<string>} - Base64 編碼的圖像數據 (包含 MIME type)
+ * @throws {Error} 如果 API 請求失敗
+ */
+async function callStabilityAI(prompt, style_preset = "fantasy-art", options = {}) {
   console.log(`--- [AI LOG/Stability Request] Style: ${style_preset} ---`); // 不打印 prompt
   if (!STABILITY_API_KEY) throw new Error("Stability AI API 金鑰未設定");
 
   const formData = new FormData();
   formData.append("prompt", prompt);
-  formData.append("output_format", "webp"); // webp 通常較小
+  formData.append("output_format", options.output_format || "webp"); // webp 通常較小
+  
+  // 添加風格預設
   if (style_preset) {
       formData.append("style_preset", style_preset);
   }
-  // 可以根據需要添加其他參數，例如 aspect_ratio, negative_prompt 等
-  // formData.append("aspect_ratio", "1:1");
+  
+  // 動態添加其他支援的參數
+  const validParams = [
+    "negative_prompt", "seed", "steps", "cfg_scale", 
+    "samples", "dimensions", "weight", "image_strength", 
+    "safety_filter", "aspect_ratio"
+  ];
+  
+  for (const param of validParams) {
+    if (options[param] !== undefined) {
+      formData.append(param, options[param].toString());
+    }
+  }
 
   try {
     const response = await fetch(`https://api.stability.ai/v2beta/stable-image/generate/core`, {
@@ -200,7 +297,31 @@ async function callStabilityAI(prompt, style_preset = "fantasy-art") {
   }
 }
 
+/**
+ * 獲取 Stability AI 的可用參數說明
+ * @returns {object} - 參數說明物件
+ */
+function getStabilityAIParamsInfo() {
+  return {
+    prompt: "圖像生成的主要描述文字（英文效果較佳）",
+    style_preset: "預設風格，例如 'fantasy-art', 'photographic', 'digital-art', 'comic-book' 等",
+    negative_prompt: "指定不希望出現在生成圖像中的元素",
+    seed: "控制生成的隨機性，相同的種子可以產生相似的結果（數字）",
+    cfg_scale: "提示詞遵循程度，範圍通常在 0-30 之間，預設 7（數字）",
+    steps: "生成過程的迭代次數，影響圖像品質和細節，通常 20-50（數字）",
+    samples: "單次請求生成的圖像數量（數字）",
+    dimensions: "指定圖像尺寸，例如 '1024x1024'（字串）",
+    weight: "提示詞的權重，影響各部分提示的重要性（數字）",
+    image_strength: "用於圖像到圖像轉換時，原始圖像的保留程度，0-1之間（數字）",
+    safety_filter: "是否啟用安全過濾（布林值）",
+    aspect_ratio: "圖像的長寬比，例如 '1:1', '16:9'（字串）",
+    output_format: "輸出格式，如 'webp', 'png', 'jpeg'（字串）"
+  };
+}
+
 module.exports = {
   callOpenAI,
-  callStabilityAI
+  callStabilityAI,
+  sanitizeAndParseJSON,
+  getStabilityAIParamsInfo
 };
