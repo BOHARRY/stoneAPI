@@ -13,7 +13,6 @@ function formatPoemAnalysisToHtml(analysisObj, selectedCards) {
     const content = analysisObj.analysis_content || analysisObj.poem_analysis || analysisObj;
     const cardNames = selectedCards.map(c => c?.name || '?').join('、');
     let html = `<div class="analysis-content poem-analysis">`;
-    html += `<div class="section trigram-summary"><h3>您抽得卦象</h3><p class="trigram-names">${cardNames}</p></div>`;
     html += '</div>';
     return html;
   } catch (error) {
@@ -105,21 +104,27 @@ router.post('/analyze', async (req, res) => {
       }
     }
 
-    // 3. 構建籤詩HTML (使用修改後的格式，不包含interpretation)
+    // 3. 構建籤詩HTML
     const poemLines = analysisResult.poemText.split('\n').filter(line => line.trim());
     let customHtml = `
-<div class="analysis-content poem-analysis">
-  <div class="poem-header">
-    <h3>第${numberToChinese(parseInt(analysisResult.poemNumber))}籤：${analysisResult.poemLevel}（${analysisResult.poemSymbols || ''}）</h3>
-  </div>
-  <div class="poem-content">
-    ${poemLines.map(line => `<p>${line}</p>`).join('')}
-  </div>
-  <div class="section trigram-summary">
-    <h3>您抽得卦象</h3>
-    <p class="trigram-names">${cardNames}</p>
-  </div>
-</div>`;
+    <div class="poem-background">
+      <div class="poem-header">
+        <h3>第${numberToChinese(parseInt(analysisResult.poemNumber))}籤 ${analysisResult.poemLevel}（${analysisResult.poemSymbols || ''}）</h3>
+      </div>
+      <div class="poem-body">
+        <!-- 圖片容器預留位置 - 前端會自動填充 -->
+        <div id="finalPoemImageContainer" class="poem-image-container">
+          <img id="finalPoemImage" class="poem-image" alt="籤詩意象圖" />
+        </div>
+        <div id="poemAnalysisText" class="poem-text">
+          <div class="analysis-content poem-analysis">
+            <div class="poem-content">
+              ${poemLines.map(line => `<p>${line}</p>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 
     analysisHtml = customHtml;
 
@@ -133,13 +138,19 @@ router.post('/analyze', async (req, res) => {
       const poemLevel = analysisResult.poemLevel;
       
       const imagePromptGenPrompt = `
-Based on this Chinese Mazu Temple Fortune Poetry (number ${poemNumber}, level: ${poemLevel}):
+Based on this Chinese Mazu Temple Fortune Poem (Number ${poemNumber}, Fortune Level: ${poemLevel}):
 "${poemText}"
 
-Create a detailed English image prompt that captures the essence of this poetry for AI image generation.
-Include traditional Chinese temple elements, mystical atmosphere, and symbolic imagery related to the poem's meaning.
-Style: "A traditional Chinese deity illustration in vintage woodblock style, featuring a graceful female goddess standing on a cliff surrounded by clouds, with a radiant sun and sacred aura behind her. Fine linework, minimal shading, delicate textures, and symbolic spiritual atmosphere. Sepia ink on parchment background. Inspired by classical East Asian religious art and antique temple divination slips. No modern elements, no color, peaceful and divine mood."
+Generate a detailed English image prompt that captures the essence and symbolism of this poem, suitable for use with AI image generation models.
+The prompt should incorporate:
+- Traditional Chinese temple aesthetics
+- A mystical and sacred atmosphere
+- Visual metaphors and symbolic imagery inspired by the poem’s meaning
+
+The visual style must follow this description:
+"In the style of a traditional Chinese woodblock print. Fine linework, minimal shading, and a muted sepia-toned or ink wash color palette. Inspired by Ming dynasty illustrations, Taoist religious iconography, and East Asian sacred art. Soft textures, flowing garments, radiant halos, and symbolic cloud and mountain motifs. Peaceful, mystical, ancient atmosphere. No modern elements or vivid colors."
 `;
+
 
       const imagePromptResult = await callOpenAI(imagePromptGenPrompt, `analyze-img-prompt-${sessionId}`);
       
