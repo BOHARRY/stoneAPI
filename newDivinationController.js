@@ -148,7 +148,7 @@ The prompt should incorporate:
 - Visual metaphors and symbolic imagery inspired by the poem’s meaning
 
 The visual style must follow this description:
-"In the style of a traditional Chinese woodblock print. Fine linework, minimal shading, and a muted sepia-toned or ink wash color palette. Inspired by Ming dynasty illustrations, Taoist religious iconography, and East Asian sacred art. Soft textures, flowing garments, radiant halos, and symbolic cloud and mountain motifs. Peaceful, mystical, ancient atmosphere. No modern elements or vivid colors."
+"Eight Immortals crossing the sea on individual skiffs, each figure defined by their signature artefact and flowing robes, turbulent stylised waves and auspicious swirling clouds below a flattened picture‑plane, rendered in a hybrid Kelmscott‑Press wood‑engraving × classical East‑Asian woodblock manner: dense cross‑hatching blended with fluid sumi‑e brush‑line accents, warm sepia monochrome, medieval‑oriental composition, no modern objects, no text."
 `;
 
 
