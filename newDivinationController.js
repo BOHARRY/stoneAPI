@@ -4,7 +4,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { callOpenAI, sanitizeAndParseJSON, callStabilityAI } = require('./aiUtils');
 
-// formatPoemAnalysisToHtml (保持不變 - 用於格式化籤詩)
+// formatPoemAnalysisToHtml 函數 (簡化後不包含interpretation部分)
 function formatPoemAnalysisToHtml(analysisObj, selectedCards) {
   try {
     if (!analysisObj || typeof analysisObj !== 'object') {
@@ -14,30 +14,6 @@ function formatPoemAnalysisToHtml(analysisObj, selectedCards) {
     const cardNames = selectedCards.map(c => c?.name || '?').join('、');
     let html = `<div class="analysis-content poem-analysis">`;
     html += `<div class="section trigram-summary"><h3>您抽得卦象</h3><p class="trigram-names">${cardNames}</p></div>`;
-    const sections = [
-      { key: '卦象總解', title: '卦象總解' }, { key: '當前運勢', title: '當前運勢' },
-      { key: '應對之道', title: '應對之道' }, { key: '最終啟示', title: '最終啟示' }
-    ];
-    let sectionFound = false;
-    sections.forEach(section => {
-      if (content[section.key] && typeof content[section.key] === 'string') {
-        html += `<div class="section section-${section.key}"><h3>${section.title}</h3><p>${content[section.key].replace(/\n/g, '<br>')}</p></div>`;
-        sectionFound = true;
-      }
-    });
-    if (!sectionFound) {
-      html += '<div class="section section-fallback"><h3>綜合解析</h3>';
-      let fallbackContent = '';
-      for (const value of Object.values(content)) {
-        if (typeof value === 'string') { fallbackContent += `<p>${value.replace(/\n/g, '<br>')}</p>`; }
-      }
-      if (!fallbackContent) {
-          fallbackContent = `<pre>${JSON.stringify(content, null, 2)}</pre>`;
-          html += `<p>無法提取標準格式的解析，顯示原始回應：</p>`;
-      }
-      html += fallbackContent;
-      html += '</div>';
-    }
     html += '</div>';
     return html;
   } catch (error) {
@@ -47,7 +23,7 @@ function formatPoemAnalysisToHtml(analysisObj, selectedCards) {
   }
 }
 
-// handleApiError (保持不變 - 通用錯誤處理)
+// handleApiError 函數
 function handleApiError(endpoint, error, details = {}) {
     const errorId = uuidv4().slice(0, 8);
     const isAiError = error.message && (error.message.includes('OpenAI API') || error.message.includes('GPT 回傳') || error.message.includes('JSON') || error.message.includes('圖片生成'));
@@ -59,10 +35,8 @@ function handleApiError(endpoint, error, details = {}) {
     return { success: false, error: userMessage, errorId, errorDetails: process.env.NODE_ENV === 'development' ? error.message : undefined };
 }
 
-
 // --- API Endpoint: /api/divination/analyze (新流程核心) ---
 router.post('/analyze', async (req, res) => {
-  // 只接收 selectedCards
   const { selectedCards } = req.body;
   const endpoint = 'Divination Analyze (LingShi)';
 
@@ -79,26 +53,38 @@ router.post('/analyze', async (req, res) => {
   let analysisResult = null;
   let analysisHtml = '';
   let finalImageUrl = null;
-  const sessionId = uuidv4(); // 為這次分析產生一個 ID
+  const sessionId = uuidv4();
 
   try {
     console.log(`--- [API LOG/${endpoint}] 開始為卡牌組合 [${cardNames}] 生成籤詩分析 (Session: ${sessionId}) ---`);
 
-    // 1. 建構籤詩分析提示詞
-    const analysisPrompt = `你是一位精通易經八卦的解籤師，請根據使用者抽到的以下三張卦象，為他們提供一份指點迷津的籤詩分析。
+    // 1. 建構籤詩分析提示詞 - 修改為媽祖靈籤格式，移除interpretation
+    const analysisPrompt = `你是一位精通易經八卦的解籤師，請根據使用者抽到的以下三張卦象，為他們提供媽祖靈籤分析。
+
 **抽到的卦象組合**：${cardNames}
-**任務**：生成一份包含以下部分的籤詩分析報告，並嚴格以 JSON 格式回應：
-1.  **卦象總解**: 綜合解釋這三個卦象組合的整體意涵。
-2.  **當前運勢**: 分析詢問者目前狀況。
-3.  **應對之道**: 提供具體建議。
-4.  **最終啟示**: 給予鼓勵或祝福。
-**要求**：台灣正體中文，仿傳統籤詩語氣但易懂，緊扣卦象組合，每部分約50-100字。
-**JSON結構**：{"poem_analysis": {"卦象總解": "...", "當前運勢": "...", "應對之道": "...", "最終啟示": "..."}}`;
+
+**任務**：
+1. 請將前兩個卦象組合成一個「重卦」（六爻），然後與第三個卦象綜合判斷
+2. 確定這個組合最符合媽祖靈籤60支中的哪一支（若有多支相近，請選擇較吉利的那一支）
+3. 生成完整的靈籤分析，包含以下內容，並以JSON格式回應：
+
+{
+  "poemNumber": "籤詩編號（1-60之間的整數）",
+  "poemLevel": "籤詩等級（上籤/中籤/下籤）",
+  "poemSymbols": "卦象標記（如：丁庚）",
+  "poemText": "完整四句籤詩，每句一行，格式為詩句文本"
+}
+
+**要求**：
+- 使用台灣正體中文
+- 籤詩格式必須遵循傳統格式：第X籤：上/中/下籤（卦象標記）
+- 生成的籤詩必須是四句，每句七言或五言
+- 解析需緊扣卦象組合`;
 
     // 2. 呼叫 OpenAI 獲取分析結果
     try {
       analysisResult = await callOpenAI(analysisPrompt, `analyze-poem-${sessionId}`);
-    } catch (error) { // 嘗試從錯誤中恢復 JSON
+    } catch (error) {
       console.warn(`--- [API LOG/${endpoint} AI Parse Warning] ---`, error.message);
       const contentMatch = error.message.match(/原始內容片段\: (.*?)\.\.\.$/);
       if (contentMatch && contentMatch[1]) {
@@ -107,40 +93,96 @@ router.post('/analyze', async (req, res) => {
       } else { throw error; }
     }
 
-    // 3. 格式化籤詩 HTML
-    analysisHtml = formatPoemAnalysisToHtml(analysisResult, selectedCards);
-    if (!analysisHtml || analysisHtml.includes("啟示獲取失敗")) {
-      console.warn(`--- [API LOG/${endpoint} Warning] 分析 HTML 內容可能無效 ---`);
+    // 提取並確保所有必要欄位存在
+    if (!analysisResult.poemNumber || !analysisResult.poemLevel || !analysisResult.poemText) {
+      console.warn(`--- [API LOG/${endpoint} Warning] 分析結果缺少必要欄位 ---`, analysisResult);
+      // 嘗試使用fallback值修復
+      analysisResult.poemNumber = analysisResult.poemNumber || "42";
+      analysisResult.poemLevel = analysisResult.poemLevel || "中籤";
+      analysisResult.poemSymbols = analysisResult.poemSymbols || "天地";
+      if (!analysisResult.poemText) {
+        analysisResult.poemText = "富貴由天莫強求，須知機會在沙洲，\n若然得意誇前事，造化還他舊日愁。";
+      }
     }
 
+    // 3. 構建籤詩HTML (使用修改後的格式，不包含interpretation)
+    const poemLines = analysisResult.poemText.split('\n').filter(line => line.trim());
+    let customHtml = `
+<div class="analysis-content poem-analysis">
+  <div class="poem-header">
+    <h3>第${numberToChinese(parseInt(analysisResult.poemNumber))}籤：${analysisResult.poemLevel}（${analysisResult.poemSymbols || ''}）</h3>
+  </div>
+  <div class="poem-content">
+    ${poemLines.map(line => `<p>${line}</p>`).join('')}
+  </div>
+  <div class="section trigram-summary">
+    <h3>您抽得卦象</h3>
+    <p class="trigram-names">${cardNames}</p>
+  </div>
+</div>`;
+
+    analysisHtml = customHtml;
+
     // 4. 生成最終圖像提示詞
-    console.log(`--- [API LOG/${endpoint}] 開始生成最終圖像提示詞 (Session: ${sessionId}) ---`);
+    console.log(`--- [API LOG/${endpoint}] 開始生成第${analysisResult.poemNumber}籤圖像 (${analysisResult.poemLevel}) ---`);
     let imagePrompt = "";
     try {
-      let poemCore = cardNames; // 預設
-      if (analysisResult?.poem_analysis?.卦象總解) { poemCore = analysisResult.poem_analysis.卦象總解; }
-      else if (typeof analysisResult === 'string') { poemCore = analysisResult.substring(0,100); }
+      // 使用籤詩內容生成圖像提示詞
+      const poemNumber = analysisResult.poemNumber;
+      const poemText = analysisResult.poemText;
+      const poemLevel = analysisResult.poemLevel;
+      
+      const imagePromptGenPrompt = `
+Based on this Chinese Mazu Temple Fortune Poetry (number ${poemNumber}, level: ${poemLevel}):
+"${poemText}"
 
-      const imagePromptGenPrompt = `Based on the I-Ching divination result for "${cardNames}" summarized as "${poemCore}", create a concise English image prompt for an AI image generator. Capture the essence and symbolism. Style: "Inspired by Alphonse Mucha and traditional East Asian ink wash painting (sumi-e), fantasy realism style. Focused composition, symbolic subject of [核心卦意象徵]. Setting: [相關寧靜場景]. Atmosphere: [卦意氛圍]. Lighting: ethereal soft light, drifting mist, touches of gold. Strictly no text." Respond only with the prompt string.`;
+Create a detailed English image prompt that captures the essence of this poetry for AI image generation.
+Include traditional Chinese temple elements, mystical atmosphere, and symbolic imagery related to the poem's meaning.
+Style: "A traditional Chinese deity illustration in vintage woodblock style, featuring a graceful female goddess standing on a cliff surrounded by clouds, with a radiant sun and sacred aura behind her. Fine linework, minimal shading, delicate textures, and symbolic spiritual atmosphere. Sepia ink on parchment background. Inspired by classical East Asian religious art and antique temple divination slips. No modern elements, no color, peaceful and divine mood."
+`;
 
       const imagePromptResult = await callOpenAI(imagePromptGenPrompt, `analyze-img-prompt-${sessionId}`);
-      if (typeof imagePromptResult === 'string') { imagePrompt = imagePromptResult.trim(); }
-      else if (imagePromptResult?.choices?.[0]?.message?.content) { imagePrompt = imagePromptResult.choices[0].message.content.trim().replace(/^"|"$/g, ''); }
-      else { throw new Error("無法獲取圖像提示詞"); }
+      
+      // 提取提示詞
+      if (typeof imagePromptResult === 'string') { 
+        imagePrompt = imagePromptResult.trim(); 
+      } else if (imagePromptResult.prompt) {
+        imagePrompt = imagePromptResult.prompt.trim();
+      } else if (imagePromptResult.content) {
+        imagePrompt = imagePromptResult.content.trim();
+      } else {
+        // 嘗試獲取任何可能的字符串屬性
+        for (const key in imagePromptResult) {
+          if (typeof imagePromptResult[key] === 'string' && imagePromptResult[key].length > 20) {
+            imagePrompt = imagePromptResult[key].trim();
+            break;
+          }
+        }
+      }
+      
+      if (!imagePrompt) {
+        throw new Error("無法從回應中提取圖像提示詞");
+      }
+      
       console.log(`--- [API LOG/${endpoint}] 生成的圖像提示詞 (長度: ${imagePrompt.length}) ---`);
     } catch (promptError) {
       console.error(`--- [API LOG/${endpoint} Error] 生成圖像提示詞失敗:`, promptError);
-      imagePrompt = `Symbolic representation of I-Ching trigrams ${cardNames}, Alphonse Mucha meets sumi-e style, fantasy realism, ethereal mist, soft light, touches of gold, tranquil, spiritual reflection. No text.`;
+      // 使用備用提示詞
+      imagePrompt = `Chinese fortune poetry number ${analysisResult.poemNumber}, ${analysisResult.poemLevel} fortune. Symbolic representation of I-Ching trigrams ${cardNames}, Alphonse Mucha meets sumi-e style, fantasy realism, ethereal mist, soft light, touches of gold, tranquil, spiritual reflection. NO text.`;
       console.log(`--- [API LOG/${endpoint}] 使用備用圖像提示詞 ---`);
     }
 
     // 5. 呼叫 Stability AI 生成最終圖像
     if (imagePrompt) {
       try {
-        const stylePreset = process.env.STABILITY_STYLE_PRESET || 'fantasy-art';
-        const options = { aspect_ratio: "9:16" }; // 指定比例
+        const stylePreset = process.env.STABILITY_STYLE_PRESET || 'line-art';
+        const options = { 
+          aspect_ratio: "1:1",
+          samples: 1,
+          cfg_scale: 8
+        };
         finalImageUrl = await callStabilityAI(imagePrompt, stylePreset, options);
-        console.log(`--- [API LOG/${endpoint} Image Success] 已生成最終圖像 (Session: ${sessionId}) ---`);
+        console.log(`--- [API LOG/${endpoint} Image Success] 已生成第${analysisResult.poemNumber}籤圖像 ---`);
       } catch (imageError) {
         console.error(`--- [API LOG/${endpoint} Image Error] 生成最終圖像失敗:`, imageError);
         finalImageUrl = null;
@@ -153,8 +195,8 @@ router.post('/analyze', async (req, res) => {
       success: true,
       analysis: analysisHtml,
       finalImageUrl: finalImageUrl,
-      sessionId: sessionId, // 返回 session ID 供可能的後續操作 (如儲存)
-      canSave: true // 假設總是允許儲存
+      sessionId: sessionId,
+      canSave: true
     });
 
   } catch (error) {
@@ -162,7 +204,7 @@ router.post('/analyze', async (req, res) => {
     const errorResponse = handleApiError(endpoint, error, { cardNames: selectedCards.map(c=>c.name).join(',') });
     res.status(500).json({
       ...errorResponse,
-      analysis: formatPoemAnalysisToHtml({error: `生成籤詩時發生錯誤: ${error.message}`}, selectedCards), // 返回包含錯誤訊息的HTML
+      analysis: formatPoemAnalysisToHtml({error: `生成籤詩時發生錯誤: ${error.message}`}, selectedCards),
       finalImageUrl: null,
       sessionId: null,
       canSave: false
@@ -170,5 +212,14 @@ router.post('/analyze', async (req, res) => {
   }
 });
 
+// 輔助函數：數字轉中文數字
+function numberToChinese(num) {
+  const chineseNumbers = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+  if (num <= 10) return chineseNumbers[num];
+  if (num < 20) return '十' + (num > 10 ? chineseNumbers[num - 10] : '');
+  const tens = Math.floor(num / 10);
+  const ones = num % 10;
+  return chineseNumbers[tens] + '十' + (ones > 0 ? chineseNumbers[ones] : '');
+}
 
 module.exports = router;
