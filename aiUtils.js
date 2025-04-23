@@ -10,7 +10,7 @@ const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // 預設為 gpt-4o-mini
 const STABILITY_MODEL = process.env.STABILITY_MODEL || 'stable-image-core'; // 預設模型
 // 新增 Gemini 模型環境變數，並提供預設值
-const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || 'gemini-1.5-flash-latest'; // 預設使用最新的 flash 模型
+const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || 'gemini-2.5-flash-preview-04-17'; // 預設使用最新的 flash 模型
 
 // 更新 API 金鑰檢查，包含 Google AI 金鑰
 if (!OPENAI_API_KEY && !STABILITY_API_KEY && !GOOGLE_AI_API_KEY) {
