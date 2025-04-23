@@ -11,7 +11,7 @@ const path = require('path');
 // 儲存載入的籤詩資料
 let fortunePoems = null;
 // 籤詩 JSON 檔案的路徑
-const POEM_DATA_PATH = path.join(__dirname, '..', 'real_mazu_fortune_poems.json');
+const POEM_DATA_PATH = path.join(__dirname, 'real_mazu_fortune_poems.json');
 
 // 在模組載入時，立即讀取籤詩 JSON 檔案
 // 使用同步讀取，確保啟動後資料立即可用
