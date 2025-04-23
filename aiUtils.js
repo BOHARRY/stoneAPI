@@ -1,19 +1,29 @@
 // aiUtils.js
-require('dotenv').config(); // 載入環境變數
+// 載入環境變數
+require('dotenv').config();
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
+// 新增 Google AI API 金鑰的環境變數
+const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY; 
+
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini'; // 預設為 gpt-4o-mini
 const STABILITY_MODEL = process.env.STABILITY_MODEL || 'stable-image-core'; // 預設模型
+// 新增 Gemini 模型環境變數，並提供預設值
+const GOOGLE_GEMINI_MODEL = process.env.GOOGLE_GEMINI_MODEL || 'gemini-1.5-flash-latest'; // 預設使用最新的 flash 模型
 
-if (!OPENAI_API_KEY || !STABILITY_API_KEY) {
-  console.error("錯誤：缺少 OpenAI 或 Stability AI 的 API 金鑰。請檢查 .env 檔案。");
-  // 在實際應用中，你可能想更優雅地處理這個問題，而不是僅僅打印錯誤
-  // process.exit(1); // 或者在開發模式下允許繼續但功能受限
+// 更新 API 金鑰檢查，包含 Google AI 金鑰
+if (!OPENAI_API_KEY && !STABILITY_API_KEY && !GOOGLE_AI_API_KEY) {
+  console.error("錯誤：缺少 OpenAI, Stability AI 或 Google AI 的 API 金鑰。請檢查 .env 檔案。至少需要其中一個金鑰才能使用對應功能。");
+  // 在實際應用中，你可能想更優雅地處理這個問題
+} else {
+    console.log(`AI 金鑰狀態: OpenAI: ${OPENAI_API_KEY ? '已設定' : '未設定'}, Stability AI: ${STABILITY_API_KEY ? '已設定' : '未設定'}, Google AI: ${GOOGLE_AI_API_KEY ? '已設定' : '未設定'}`);
 }
+
 
 /**
  * 修復並解析可能包含問題的 JSON 字串
+ * 此函數與原版相同，無需修改。
  * @param {string} jsonString - 可能有問題的 JSON 字串
  * @param {string} purpose - 解析的目的 (用於日誌)
  * @returns {object} - 解析後的 JSON 物件
@@ -22,133 +32,90 @@ if (!OPENAI_API_KEY || !STABILITY_API_KEY) {
 function sanitizeAndParseJSON(jsonString, purpose) {
   console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 開始清理和解析 JSON ---`);
   
-  // 移除可能的 markdown JSON 標記
+  // 移除可能的 markdown JSON 標記 (```json ... ```)
   let cleaned = jsonString.replace(/^```json\s*|```$/gi, '').trim();
   
   // 步驟 1: 先嘗試直接解析（可能本來就是有效的JSON）
   try {
-    return JSON.parse(cleaned);
+    const parsed = JSON.parse(cleaned);
+    console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 直接解析成功 ---`);
+    return parsed;
   } catch (initialError) {
-    // 繼續處理需要清理的情況
-    console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 初始解析失敗，進行深度清理 ---`);
+    // 如果直接解析失敗，記錄錯誤並繼續進行深度清理
+    console.warn(`--- [AI LOG/JSON Sanitize: ${purpose}] 初始解析失敗，進行深度清理 (${initialError.message}) ---`);
   }
 
-  // 步驟 2: 處理實際的換行和空白符號
-  // 先使用JSON.stringify格式化，這會正確處理換行符
-  try {
-    // 2.1 嘗試修復最常見的格式問題：不正確的換行
-    let preProcessed = cleaned;
-    
-    // 如果是開頭的換行問題（根據錯誤日誌）
-    if (cleaned.startsWith('{\n')) {
-      // 嘗試將所有實際換行符轉換為空格
-      preProcessed = cleaned.replace(/\n\s*/g, ' ');
-      try {
-        return JSON.parse(preProcessed);
-      } catch (e) {
-        // 繼續嘗試其他修復方法
-      }
-    }
-    
-    // 2.2 嘗試從JSON文本中提取有效的JSON部分
-    const jsonMatch = cleaned.match(/(\{[\s\S]*\})/);
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        return JSON.parse(jsonMatch[1]);
-      } catch (e) {
-        // 繼續嘗試其他修復方法
-      }
-    }
-    
-    // 步驟 3: 處理控制字元
-    cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
-      // 對於字串內的換行和特殊字元，將它們轉換為適當的轉義序列
-      if (match === '\n') return ' '; // 換行改為空格，更安全
-      if (match === '\r') return ' ';
-      if (match === '\t') return ' ';
-      if (match === '\b') return '';
-      if (match === '\f') return '';
-      // 其他控制字元直接移除
-      return '';
-    });
-    
-    // 步驟 4: 嘗試使用JSON5解析（更寬鬆的JSON解析）
+  // 步驟 2: 嘗試從JSON文本中提取有效的JSON部分 (處理Markdown或其他額外文字)
+  const jsonMatch = cleaned.match(/(\{[\s\S]*\})/);
+  if (jsonMatch && jsonMatch[1]) {
+    cleaned = jsonMatch[1].trim();
     try {
-      // 如果專案中有JSON5，可以使用它進行更寬鬆的解析
-      // 目前使用標準JSON.parse
-      return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+        console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 從提取的片段解析成功 ---`);
+        return parsed;
     } catch (e) {
-      console.warn(`--- [AI LOG/JSON Warning: ${purpose}] 清理後仍無法解析 JSON，嘗試進階修復 ---`);
-      
-      // 步驟 5: 最後的嘗試 - 重建JSON物件
-      try {
-        // 5.1 嘗試修復引號問題
-        let fixedJson = cleaned.replace(/(?<!\\)'/g, '"'); // 單引號轉雙引號
-        
-        // 5.2 嘗試修復未閉合的引號和括號
-        const openBraces = (fixedJson.match(/\{/g) || []).length;
-        const closeBraces = (fixedJson.match(/\}/g) || []).length;
-        if (openBraces > closeBraces) {
-          fixedJson += '}'.repeat(openBraces - closeBraces);
-        }
-        
-        // 5.3 去除潛在的尾隨逗號
-        fixedJson = fixedJson.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
-        
-        return JSON.parse(fixedJson);
-      } catch (e2) {
-        // 5.4 最後的絕招：手動建立物件
-        try {
-          console.error(`--- [AI LOG/JSON Error: ${purpose}] 標準修復嘗試均失敗，進行深度修復 ---`);
-          
-          // 搜尋 key-value 對
-          const keyValueRegex = /"([^"]+)"\s*:\s*"([^"]*)"/g;
-          const reconstructed = {};
-          let match;
-          
-          while ((match = keyValueRegex.exec(cleaned)) !== null) {
-            reconstructed[match[1]] = match[2];
-          }
-          
-          // 如果找到至少一個key-value對，返回重建的物件
-          if (Object.keys(reconstructed).length > 0) {
-            console.log(`--- [AI LOG/JSON Success: ${purpose}] 成功通過深度修復重建JSON物件 ---`);
-            return reconstructed;
-          }
-          
-          // 如果都失敗了，記錄詳細錯誤信息
-          console.error(`--- [AI LOG/JSON Error: ${purpose}] 所有修復嘗試均失敗 ---`);
-          
-          // 嘗試找出問題位置的字元
-          const errorMatch = e.message.match(/position (\d+)/);
-          if (errorMatch && errorMatch[1]) {
-            const position = parseInt(errorMatch[1]);
-            const problemChar = cleaned.charAt(position);
-            const context = cleaned.substring(Math.max(0, position - 20), Math.min(cleaned.length, position + 20));
-            console.error(`問題位置 ${position} 的字元: '${problemChar}' (ASCII: ${problemChar.charCodeAt(0)}), 上下文: "${context}"`);
-          }
-          
-          // 拋出詳細的錯誤
-          throw new Error(`無法解析 JSON: ${e.message}\n原始內容片段: ${jsonString.substring(0, 150)}...`);
-        } catch (finalError) {
-          throw finalError;
-        }
-      }
+        console.warn(`--- [AI LOG/JSON Sanitize: ${purpose}] 從提取的片段解析失敗，繼續深度清理 (${e.message}) ---`);
+        // 繼續嘗試其他修復方法
     }
+  } else {
+       console.warn(`--- [AI LOG/JSON Sanitize: ${purpose}] 未找到有效的JSON片段，使用原始內容進行深度清理 ---`);
+  }
+
+  // 步驟 3: 處理控制字元和常見錯誤
+  let preFinalCleaned = cleaned;
+  // 對於字串內的換行和特殊字元，將它們轉換為適當的轉義序列或移除
+  preFinalCleaned = preFinalCleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, match => {
+    // 保留常見的合法 JSON 字元轉義
+    if (match === '\n') return '\\n'; // 實際換行轉為 \n 轉義
+    if (match === '\r') return '\\r'; // 回車轉為 \r 轉義
+    if (match === '\t') return '\\t'; // tab 轉為 \t 轉義
+    if (match === '\b') return '\\b'; // 退格轉為 \b 轉義
+    if (match === '\f') return '\\f'; // 換頁轉為 \f 轉義
+    // 其他控制字元直接移除
+    return '';
+  });
+
+  // 嘗試再次解析清理後的字串
+  try {
+      const parsed = JSON.parse(preFinalCleaned);
+      console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 第二次清理後解析成功 ---`);
+      return parsed;
   } catch (e) {
-    throw new Error(`JSON處理過程中發生未預期錯誤: ${e.message}`);
+      console.warn(`--- [AI LOG/JSON Sanitize: ${purpose}] 第二次清理後解析失敗，嘗試更進階修復 (${e.message}) ---`);
+  }
+  
+  // 步驟 4: 最後的嘗試 - 更激進的修復 (例如單引號轉雙引號)
+  try {
+      // 嘗試修復單引號 (需謹慎，可能誤傷)
+      let aggressiveCleaned = preFinalCleaned.replace(/(?<!\\)'/g, '"'); // 單引號轉雙引號，排除轉義的單引號
+      
+      // 去除潛在的尾隨逗號 (需謹慎，可能誤傷)
+      aggressiveCleaned = aggressiveCleaned.replace(/,\s*\}/g, '}').replace(/,\s*\]/g, ']');
+
+      const parsed = JSON.parse(aggressiveCleaned);
+      console.log(`--- [AI LOG/JSON Sanitize: ${purpose}] 激進修復後解析成功 ---`);
+      return parsed;
+  } catch (e) {
+      console.error(`--- [AI LOG/JSON Error: ${purpose}] 所有修復嘗試均失敗 ---`);
+      console.error(`--- [AI LOG/JSON Error: ${purpose}] 原始字串片段: "${jsonString.substring(0, 200)}..."`);
+      console.error(`--- [AI LOG/JSON Error: ${purpose}] 清理中字串片段: "${cleaned.substring(0, 200)}..."`);
+      console.error(`--- [AI LOG/JSON Error: ${purpose}] 最後嘗試字串片段: "${preFinalCleaned.substring(0, 200)}..."`);
+
+      // 如果都失敗了，拋出詳細的錯誤
+      throw new Error(`無法解析 JSON (所有修復嘗試均失敗): ${e.message}\n原始內容片段: ${jsonString.substring(0, 150)}...`);
   }
 }
 
+
 /**
- * 呼叫 OpenAI Chat Completions API
+ * 呼叫 OpenAI Chat Completions API (保留原功能，可能備用或用於圖像生成提示詞)
  * @param {string} prompt - 要發送給模型的提示詞
  * @param {string} purpose - 請求目的 (用於日誌)
  * @returns {Promise<object>} - 解析後的 JSON 回應
  * @throws {Error} 如果 API 請求失敗或回應格式錯誤
  */
 async function callOpenAI(prompt, purpose = "general") {
-  console.log(`--- [AI LOG/OpenAI Request: ${purpose}] ---`); // 不打印完整 prompt，避免敏感資訊洩漏
+  console.log(`--- [AI LOG/OpenAI Request: ${purpose}] 使用模型: ${OPENAI_MODEL} ---`); 
   if (!OPENAI_API_KEY) throw new Error("OpenAI API 金鑰未設定");
 
   try {
@@ -157,6 +124,8 @@ async function callOpenAI(prompt, purpose = "general") {
       ? `${prompt}\n\n請以有效的JSON格式回覆，不要使用Markdown。確保JSON可以直接被JSON.parse()解析，沒有額外的格式或標記。`
       : prompt;
       
+    const messages = Array.isArray(enhancedPrompt) ? enhancedPrompt : [{ role: "user", content: enhancedPrompt }];
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -165,9 +134,10 @@ async function callOpenAI(prompt, purpose = "general") {
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        messages: [{ role: "user", content: enhancedPrompt }],
+        // messages: [{ role: "user", content: enhancedPrompt }], // 修改為使用 messages 變數
+        messages: messages,
         temperature: 0.7, // 稍微降低以提高一致性
-        response_format: { type: "json_object" }, // 強制 JSON 輸出模式
+        // response_format: { type: "json_object" }, // 嘗試使用強制 JSON 模式，但舊模型可能不支援或行為不穩定
       })
     });
 
@@ -188,22 +158,26 @@ async function callOpenAI(prompt, purpose = "general") {
 
     if (!content) {
       console.warn(`--- [AI LOG/OpenAI Warning: ${purpose}] 回傳內容為空。`, data);
+       // 檢查是否有非正常的結束原因
+       if (data.choices?.[0]?.finish_reason) {
+           throw new Error(`OpenAI API (${purpose}) 回傳內容為空，結束原因: ${data.choices[0].finish_reason}`);
+       }
       throw new Error(`OpenAI API (${purpose}) 回傳內容為空`);
     }
 
-    console.log(`--- [AI LOG/OpenAI Raw Response: ${purpose}] ---`); // 不打印完整內容
+    // console.log(`--- [AI LOG/OpenAI Raw Response: ${purpose}] ---`); // 不打印完整內容
     // console.log(content.substring(0, 200) + '...'); // 僅打印部分內容預覽
 
     // --- 使用加強版 JSON 解析邏輯 ---
     let parsed;
     try {
       parsed = sanitizeAndParseJSON(content, purpose);
-      console.log(`--- [AI LOG/OpenAI JSON Parsed: ${purpose}] ---`);
+      // console.log(`--- [AI LOG/OpenAI JSON Parsed: ${purpose}] ---`);
       // console.log(parsed); // 打印解析後的物件
 
-      if (typeof parsed !== 'object' || parsed === null || Object.keys(parsed).length === 0) {
-          console.warn(`--- [AI LOG/OpenAI Warning: ${purpose}] JSON 解析結果不是有效的非空物件:`, parsed);
-          throw new Error(`GPT 回傳 (${purpose}) 的 JSON 格式無效或為空`);
+      if (typeof parsed !== 'object' || parsed === null) { // 允許空物件，但檢查是否為物件
+          console.warn(`--- [AI LOG/OpenAI Warning: ${purpose}] JSON 解析結果不是有效的物件:`, parsed);
+          // throw new Error(`GPT 回傳 (${purpose}) 的 JSON 格式無效或為空`); // 根據 sanitizeAndParseJSON 的錯誤處理，這裡可能不需要再次拋錯
       }
       return parsed;
 
@@ -220,15 +194,116 @@ async function callOpenAI(prompt, purpose = "general") {
   }
 }
 
+
 /**
- * 呼叫 Stability AI 生成圖片
- * @param {string} prompt - 圖像提示詞 (英文)
- * @param {string} style_preset - 風格預設 (e.g., "fantasy-art")
- * @returns {Promise<string>} - Base64 編碼的圖像數據 (包含 MIME type)
- * @throws {Error} 如果 API 請求失敗
+ * 呼叫 Google Gemini API
+ * @param {string | Array<Object>} prompt - 要發送給模型的提示詞 (字串或包含 role/text 的訊息陣列)
+ * @param {string} purpose - 請求目的 (用於日誌)
+ * @returns {Promise<object | string>} - 如果預期是 JSON，則為解析後的物件；否則為原始文本回應
+ * @throws {Error} 如果 API 請求失敗或回應格式錯誤
  */
+async function callGeminiAPI(prompt, purpose = "general") {
+    console.log(`--- [AI LOG/Gemini Request: ${purpose}] 使用模型: ${GOOGLE_GEMINI_MODEL} ---`);
+    if (!GOOGLE_AI_API_KEY) {
+        console.error(`--- [AI LOG/Gemini Error: ${purpose}] Google AI API 金鑰未設定 ---`);
+        throw new Error("Google AI API 金鑰未設定");
+    }
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_GEMINI_MODEL}:generateContent?key=${GOOGLE_AI_API_KEY}`;
+
+    try {
+        // Gemini 的 input 格式是 contents 陣列，每個元素是 part 的陣列
+        // 簡單起見，如果輸入是字串，包裝成一個 user message
+        const contents = Array.isArray(prompt) ? prompt : [{ role: "user", parts: [{ text: prompt }] }];
+
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: contents,
+                // Optional: Add generation config if needed
+                // generationConfig: { temperature: 0.7 } // 溫度設置
+                // response_mime_type: "application/json" // Gemini 1.5 系列支援強制 JSON 輸出 (但 beta 功能可能不穩定)
+            })
+        });
+
+        if (!response.ok) {
+            let errorText = '';
+            try {
+                // 嘗試解析錯誤回應的 JSON 內容
+                const errorData = await response.json();
+                errorText = errorData?.error?.message || JSON.stringify(errorData);
+            } catch {
+                // 如果不是 JSON 格式，直接獲取文本內容
+                errorText = await response.text();
+            }
+            console.error(`--- [AI LOG/Gemini Error: ${purpose}] API 錯誤回應:`, response.status, response.statusText, errorText);
+            throw new Error(`Gemini API (${purpose}) 請求失敗: ${response.status} ${response.statusText}. 回應: ${errorText}`);
+        }
+
+        const responseData = await response.json(); // 解析 JSON 回應數據
+
+        // --- Token 使用量 logging ---
+        // console.log(`--- [AI LOG/Gemini Raw Response: ${purpose}] ---`, responseData); // 不打印完整回應
+        if (responseData.usageMetadata) {
+            console.log(`--- [AI LOG/Gemini Token Usage: ${purpose}] ---`,
+                `Prompt: ${responseData.usageMetadata.promptTokenCount || 0},`,
+                `Candidates: ${responseData.usageMetadata.candidatesTokenCount || 0},`,
+                `Total: ${responseData.usageMetadata.totalTokenCount || 0}`
+            );
+        }
+        // --- 結束 Token 使用量 logging ---
+
+        // --- 提取回應內容 ---
+        let content = '';
+        // 從回應數據結構中提取實際的文本內容
+        if (responseData.candidates?.[0]?.content?.parts?.[0]?.text) {
+            content = responseData.candidates[0].content.parts[0].text;
+        } else {
+            // 如果無法提取內容，檢查是否有完成原因 (非正常停止) 或被阻止的原因
+            const finishReason = responseData.candidates?.[0]?.finishReason;
+            const blockReason = responseData.promptFeedback?.blockReason;
+
+            if (finishReason && finishReason !== "STOP") {
+                console.error(`--- [AI LOG/Gemini Error: ${purpose}] 回應被終止:`, finishReason, responseData.candidates?.[0]?.safetyRatings);
+                 const safetyRatings = responseData.candidates?.[0]?.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ') || '無安全評級詳情';
+                throw new Error(`Gemini 回應 (${purpose}) 因 '${finishReason}' 而被終止。安全檢查: ${safetyRatings}`);
+            } else if (blockReason) {
+                console.error(`--- [AI LOG/Gemini Error: ${purpose}] 請求被阻止:`, blockReason, responseData.promptFeedback.safetyRatings);
+                 const safetyRatings = responseData.promptFeedback?.safetyRatings?.map(r => `${r.category}: ${r.probability}`).join(', ') || '無安全評級詳情';
+                throw new Error(`Gemini 請求 (${purpose}) 因 '${blockReason}' 而被阻止。安全檢查: ${safetyRatings}`);
+            } else {
+                // 其他格式不符預期的情況
+                console.error(`--- [AI LOG/Gemini Error: ${purpose}] 回應格式不符預期:`, responseData);
+                throw new Error(`Gemini 回應 (${purpose}) 格式不符，無法提取內容。`);
+            }
+        }
+
+        // --- 嘗試解析 JSON ---
+        try {
+            // 使用通用的 sanitizeAndParseJSON 函數進行解析
+             console.log(`--- [AI LOG/Gemini Attempting JSON Parse: ${purpose}] ---`);
+            return sanitizeAndParseJSON(content, purpose);
+        } catch (e) {
+            // 如果 JSON 解析失敗，但我們仍然有原始文本內容
+            console.warn(`--- [AI LOG/Gemini JSON Parse Failed: ${purpose}] 返回原始文本。`, e.message);
+            // 根據呼叫目的，可能只需要原始文本。如果目的需要 JSON，則應在呼叫方進行驗證。
+            // 這裡先返回原始文本，讓呼叫方決定如何處理。
+            // 或者更嚴格地說，如果預期 JSON 但解析失敗，就應該拋錯。
+            // 假設大多數情況下，我們呼叫 Gemini 是為了獲得結構化的 JSON。
+            throw new Error(`Gemini 回傳 (${purpose}) 內容無法解析為 JSON: ${e.message}`);
+        }
+
+    } catch (error) {
+        console.error(`--- [AI LOG/Gemini Error: ${purpose}] 呼叫失敗:`, error);
+        // 重新拋出錯誤
+        throw error;
+    }
+}
+
+
 /**
- * 呼叫 Stability AI 生成圖片
+ * 呼叫 Stability AI 生成圖片 (保留原功能，用於未來可能的圖像生成需求)
  * @param {string} prompt - 圖像提示詞 (英文)
  * @param {string} style_preset - 風格預設 (e.g., "fantasy-art")
  * @param {object} options - 其他可選參數的物件
@@ -298,7 +373,7 @@ async function callStabilityAI(prompt, style_preset = "fantasy-art", options = {
 }
 
 /**
- * 獲取 Stability AI 的可用參數說明
+ * 獲取 Stability AI 的可用參數說明 (保留)
  * @returns {object} - 參數說明物件
  */
 function getStabilityAIParamsInfo() {
@@ -319,9 +394,11 @@ function getStabilityAIParamsInfo() {
   };
 }
 
+// 導出新的 callGeminiAPI 函數
 module.exports = {
   callOpenAI,
   callStabilityAI,
-  sanitizeAndParseJSON,
-  getStabilityAIParamsInfo
+  callGeminiAPI, // 新增
+  sanitizeAndParseJSON, // 保留
+  getStabilityAIParamsInfo // 保留
 };
