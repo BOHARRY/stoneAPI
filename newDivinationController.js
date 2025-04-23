@@ -307,7 +307,7 @@ ${briefMeanings.map(item => `${item.index}. 第${item.poemNumber}籤：${item.me
     if (matchedPoemData && matchedPoemData.poemNumber) {
         const poemNumberPadded = matchedPoemData.poemNumber.toString().padStart(2, '0');
         // 這裡構建的是前端可以直接訪問的相對路徑 URL
-        finalImageUrl = `/assets/outputs/poem_${poemNumberPadded}.png`;
+        finalImageUrl = `assets/outputs/poem_${poemNumberPadded}.png`;
         console.log(`--- [API LOG/${endpoint}] 確定最終圖片 URL: ${finalImageUrl} ---`);
     } else {
         // 如果沒有匹配到籤詩，圖片 URL 為空
